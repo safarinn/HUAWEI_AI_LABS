@@ -1,73 +1,74 @@
-import numpy as np
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import matplotlib.pyplot as plt
 
+# ------------------------
+# 1. DATA (Synthetic)
+# ------------------------
+torch.manual_seed(42)
 
-class SGD:
-    def __init__(self, lr=0.01):
-        self.lr = lr
+X = torch.unsqueeze(torch.linspace(-1, 1, 300), dim=1)
+y = X**2 + 0.2 * torch.rand(X.size())
 
-    def update(self, params, grads):
-        for key in params.keys():
-            params[key] -= self.lr * grads[key]
-
-
-class Momentum:
-    def __init__(self, lr=0.01, momentum=0.9):
-        self.lr = lr
-        self.momentum = momentum
-        self.v = None
-
-    def update(self, params, grads):
-        if self.v is None:
-            self.v = {}
-            for key, val in params.items():
-                self.v[key] = np.zeros_like(val)
-
-        for key in params.keys():
-            self.v[key] = self.momentum * self.v[key] - self.lr * grads[key]
-            params[key] += self.v[key]
-
-
-class AdaGrad:
-    def __init__(self, lr=0.01):
-        self.lr = lr
-        self.h = None
-
-    def update(self, params, grads):
-        if self.h is None:
-            self.h = {}
-            for key, val in params.items():
-                self.h[key] = np.zeros_like(val)
-
-        for key in params.keys():
-            self.h[key] += grads[key] * grads[key]
-            params[key] -= self.lr * grads[key] / (np.sqrt(self.h[key]) + 1e-7)
-
-
-class Adam:
-    def __init__(self, lr=0.001, beta1=0.9, beta2=0.999):
-        self.lr = lr
-        self.beta1 = beta1
-        self.beta2 = beta2
-        self.iter = 0
-        self.m = None
-        self.v = None
-
-    def update(self, params, grads):
-        if self.m is None:
-            self.m, self.v = {}, {}
-            for key, val in params.items():
-                self.m[key] = np.zeros_like(val)
-                self.v[key] = np.zeros_like(val)
-
-        self.iter += 1
-        lr_t = (
-            self.lr
-            * np.sqrt(1.0 - self.beta2 ** self.iter)
-            / (1.0 - self.beta1 ** self.iter)
+# ------------------------
+# 2. MODEL (MLP)
+# ------------------------
+class SimpleMLP(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(1, 32),
+            nn.ReLU(),
+            nn.Linear(32, 1)
         )
 
-        for key in params.keys():
-            self.m[key] += (1 - self.beta1) * (grads[key] - self.m[key])
-            self.v[key] += (1 - self.beta2) * (grads[key] ** 2 - self.v[key])
-            params[key] -= lr_t * self.m[key] / (np.sqrt(self.v[key]) + 1e-7)
+    def forward(self, x):
+        return self.net(x)
 
+# ------------------------
+# 3. TRAIN FUNCTION
+# ------------------------
+def train_model(optimizer_name, lr=0.01, epochs=50):
+    model = SimpleMLP()  # reset weights
+    criterion = nn.MSELoss()
+
+    if optimizer_name == "SGD":
+        optimizer = optim.SGD(model.parameters(), lr=lr)
+    elif optimizer_name == "Adam":
+        optimizer = optim.Adam(model.parameters(), lr=lr)
+    elif optimizer_name == "RMSprop":
+        optimizer = optim.RMSprop(model.parameters(), lr=lr)
+
+    loss_history = []
+
+    for epoch in range(epochs):
+        optimizer.zero_grad()
+        outputs = model(X)
+        loss = criterion(outputs, y)
+        loss.backward()
+        optimizer.step()
+
+        loss_history.append(loss.item())
+
+    return loss_history
+
+# ------------------------
+# 4. RUN EXPERIMENTS
+# ------------------------
+sgd_loss = train_model("SGD")
+adam_loss = train_model("Adam")
+rms_loss = train_model("RMSprop")
+
+# ------------------------
+# 5. PLOT
+# ------------------------
+plt.plot(sgd_loss, label="SGD")
+plt.plot(adam_loss, label="Adam")
+plt.plot(rms_loss, label="RMSprop")
+
+plt.xlabel("Epochs")
+plt.ylabel("Loss")
+plt.title("Optimizer Comparison")
+plt.legend()
+plt.show()
